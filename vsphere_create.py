@@ -112,7 +112,7 @@ or VM. A name for the unit to create is required.''',
 def get_conn_args():
 	'''Get host info from config file'''
 	config = configparser.ConfigParser()
-	config.read('esxi-mgmt.conf')
+	config.read('vsphere.conf')
 	args['address'] = config['host']['ip address']
 	args['username'] = config['host']['username']
 	args['password'] = config['host']['password']
