@@ -3,10 +3,10 @@
 * Auhtor:		Dennis Tyresson
 * Date:			2020-02-23
 * Course:		IT524G Virtualization
-* Description:		Python script for interacting with VMware vSphere to create vSwitch
-*			or guest VM. The script takes several arguments, which can be displayed
-*			by running the script with "-h", e.g. "python vsphere_create.py -h". The
-*			script works with Python 3.6 or higher.
+* Description:	Python script for interacting with VMware vSphere to create vSwitch
+*			 	or guest VM. The script takes several arguments, which can be displayed
+*				by running the script with "-h", e.g. "python esxi-mgmt.py -h". The
+*				script works with Python 3.6 or higher.
 """
 
 import sys
@@ -37,8 +37,10 @@ or VM. A name for the unit to create is required.''',
 						required=True)
 	parser.add_argument('-p', '--port-group', 
 						help="Portgroup to attach to switch or VM",
-						action='store',
-						required=True)
+						action='store')
+	parser.add_argument('-t', '--template', 
+						help="Name of template to use for deployment", 
+						action='store')
 	parser.add_argument('-v', '--vlan', 
 						help="VLAN to attach to switch", 
 						action='store')
@@ -69,7 +71,6 @@ or VM. A name for the unit to create is required.''',
 
 	# Required for all options
 	args['name'] = result.name
-	args['port_group'] = result.port_group
 
 	# Parse result for creating switch
 	if result.switch:
@@ -77,6 +78,8 @@ or VM. A name for the unit to create is required.''',
 		# Check for valid input
 		if not result.vlan:
 			raise Exception("No VLAN id provided.")
+		if not result.port_group:
+			raise Exception("No portgroup provided.")
 		if result.mtu:
 			if 0 < result.mtu < 9001:
 				args['mtu'] = result.mtu
@@ -88,11 +91,21 @@ or VM. A name for the unit to create is required.''',
 		# Save arguments to dictionary
 		args['action'] = 'switch'
 		args['vlan'] = result.vlan
+		args['port_group'] = result.port_group
 
 	# Parse result for creating VM
 	elif result.vm:
 
+		# If user request deployment from template
+		# no further check for hardware options required
+		args['action'] = 'vm'
+		if result.template:
+			args['template'] = result.template
+			return args
+
 		# Check that hardware options are provided
+		if not result.port_group:
+			raise Exception("No portgroup provided.")
 		if not result.cpu:
 			raise Exception("No CPU option provided for VM")
 		if not result.ram:
@@ -101,10 +114,10 @@ or VM. A name for the unit to create is required.''',
 			raise Exception("No Disk option provided for VM")
 
 		# Save arguments to dictionary
-		args['action'] = 'vm'
 		args['cpu'] = result.cpu
 		args['ram'] = result.ram
 		args['disk'] = result.disk
+		args['port_group'] = result.port_group
 	else:
 		raise Exception("No action specified!")
 	return args
@@ -174,6 +187,7 @@ class ServerConnection():
 			cpu = int(host.hardware.cpuInfo.numCpuThreads)
 			mem = round(int(host.hardware.memorySize)/(1024*1024))
 
+			# Save the greatest value
 			if cpu > saved_cpu:
 				saved_cpu = cpu
 			if mem > saved_memory:
@@ -190,12 +204,17 @@ class ServerConnection():
 
 	def create_vswitch(self, host, args):
 		'''Create new virtual switch'''
+
+		# Fetch variables from dictionary
 		name = args['name']
 		mtu = args['mtu']
+
+		# Define specifications
 		vss_spec = vim.host.VirtualSwitch.Specification()
 		vss_spec.numPorts = 1024
 		vss_spec.mtu = mtu
 
+		# Perform creation task
 		try:
 			host.configManager.networkSystem.AddVirtualSwitch(vswitchName=name, spec=vss_spec)
 			print(f"{host.name} Successfully created switch: {name}")
@@ -207,9 +226,13 @@ class ServerConnection():
 
 	def create_portgroup(self, host, args):
 		'''Create portgroup and attach to vSwitch'''
+
+		# Fetch variables from dictionary
 		vssname = args['name']
 		vlan = args['vlan']
 		pgname = args['port_group']
+
+		# Define specifications
 		portgroup_spec = vim.host.PortGroup.Specification()
 		portgroup_spec.vswitchName = vssname
 		portgroup_spec.name = pgname
@@ -221,6 +244,7 @@ class ServerConnection():
 		network_policy.security.forgedTransmits = False
 		portgroup_spec.policy = network_policy
 
+		# Perform creation task
 		try:
 			host.configManager.networkSystem.AddPortGroup(portgroup_spec)
 			print(f"{host.name} Successfully created portgroup: {pgname}")
@@ -232,10 +256,13 @@ class ServerConnection():
 
 	def create_vm(self, args):
 		'''Function that creates a virtual machine'''
+
+		# Get environment resources
 		vm_folder = self.get_obj([vim.Folder], 'vm')
 		resource_pool = self.get_obj([vim.ResourcePool], 'Resources')
 		datastore = '[NFSstore] ' + args['name']
 
+		# Define specifications
 		vmx_file = vim.vm.FileInfo(logDirectory=None,
 									snapshotDirectory=None,
 									suspendDirectory=None,
@@ -246,6 +273,7 @@ class ServerConnection():
 		vm_spec.memoryMB = args['ram']
 		vm_spec.files = vmx_file
 		
+		# Perform creation task
 		try:
 			print("Creating VM ...")
 			task = vm_folder.CreateVM_Task(config=vm_spec, pool=resource_pool)
@@ -256,6 +284,8 @@ class ServerConnection():
 
 	def add_nic(self, vm, network):
 		'''Function that adds a NIC to the VM and connects it to the portgroup'''
+
+		# Define specifications
 		spec = vim.vm.ConfigSpec()
 		nic_changes = []
 		nic_spec = vim.vm.device.VirtualDeviceSpec()
@@ -273,15 +303,47 @@ class ServerConnection():
 		nic_spec.device.connectable.status = 'untried'
 		nic_spec.device.wakeOnLanEnabled = True
 		nic_spec.device.addressType = 'assigned'
-
 		nic_changes.append(nic_spec)
 		spec.deviceChange = nic_changes
 
+		# Perform creation task
 		try:
 			print("Attaching VM to portgroup ...")
 			task = vm.ReconfigVM_Task(spec=spec)
 			WaitForTask(task)
 			print("Successfully added VM to portgroup.")
+		except Exception as e:
+			print(e)
+
+	def clone_vm(self, template, vm_name):
+		'''Function that deploy a VM from an existing template'''
+
+		# Get environment resources
+		template_resources = conn.get_obj([vim.VirtualMachine])
+		template = None
+		for temp in template_resources:
+			if temp.name == template:
+				template = temp
+		if not template:
+			raise Exception("Template not found.")
+		vm_folder = self.get_obj([vim.Folder], 'vm')
+		resource_pool = self.get_obj([vim.ResourcePool], 'Resources')
+		datastore = self.get_obj([vim.Datastore], 'NFSstore')
+
+		# Define specifications
+		vmconf = vim.vm.ConfigSpec()
+		relospec = vim.vm.RelocateSpec()
+		relospec.datastore = datastore
+		relospec.pool = resource_pool
+		clonespec = vim.vm.CloneSpec()
+		clonespec.location = relospec
+
+		# Perform creation task
+		try:
+			print("Cloning VM...")
+			task = template.Clone(folder=vm_folder, name=vm_name, spec=clonespec)
+			WaitForTask(task)
+			print("Cloning succesfull!")
 		except Exception as e:
 			print(e)
 		
@@ -301,15 +363,20 @@ if __name__ == '__main__':
 
 	# Create VM
 	if args['action'] == 'vm':
-		try:
-			if conn.check_hardware(hosts, args) == True:
-				network = conn.get_obj([vim.Network], args['port_group'])
-				conn.create_vm(args)
-				vm = conn.get_obj([vim.VirtualMachine], args['name'])
-				time.sleep(1)
-				conn.add_nic(vm, network)
-		except Exception as e:
-			print(e)
+		if args['template']:
+			try:
+				conn.clone_vm(args['template'],args['name'])
+			except Exception as e:
+						print(e)
+		else:
+			try:
+				if conn.check_hardware(hosts, args) == True:
+					network = conn.get_obj([vim.Network], args['port_group'])
+					conn.create_vm(args)
+					vm = conn.get_obj([vim.VirtualMachine], args['name'])
+					conn.add_nic(vm, network)
+			except Exception as e:
+				print(e)
 
 	# Create switch
 	elif args['action'] == 'switch':
