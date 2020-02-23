@@ -5,7 +5,7 @@
 * Course:		IT524G Virtualization
 * Description:		Python script for interacting with VMware vSphere to create vSwitch
 *			or guest VM. The script takes several arguments, which can be displayed
-*			by running the script with "-h", e.g. "python esxi-mgmt.py -h". The
+*			by running the script with "-h", e.g. "python vsphere_create.py -h". The
 *			script works with Python 3.6 or higher.
 """
 
