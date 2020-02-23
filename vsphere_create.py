@@ -3,10 +3,10 @@
 * Auhtor:		Dennis Tyresson
 * Date:			2020-02-23
 * Course:		IT524G Virtualization
-* Description:	Python script for interacting with VMware vSphere to create vSwitch
-*			 	or guest VM. The script takes several arguments, which can be displayed
-*				by running the script with "-h", e.g. "python esxi-mgmt.py -h". The
-*				script works with Python 3.6 or higher.
+* Description:		Python script for interacting with VMware vSphere to create vSwitch
+*			or guest VM. The script takes several arguments, which can be displayed
+*			by running the script with "-h", e.g. "python esxi-mgmt.py -h". The
+*			script works with Python 3.6 or higher.
 """
 
 import sys
