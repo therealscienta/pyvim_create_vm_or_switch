@@ -19,7 +19,7 @@ from pyVim.task import WaitForTask
 
 def get_args():
 	'''Function to retrieve arguments passed to script'''
-	parser = argparse.ArgumentParser(prog='esxi-mgmt.py',
+	parser = argparse.ArgumentParser(prog='vsphere-create.py',
 	                                 description='''Administer new vSwitch or Virtual Machine for ESXi.
 User must provide an action to perform; create switch 
 or VM. A name for the unit to create is required.''',
@@ -76,15 +76,16 @@ or VM. A name for the unit to create is required.''',
 	if result.switch:
 
 		# Check for valid input
-		if not result.vlan:
-			raise Exception("No VLAN id provided.")
 		if not result.port_group:
 			raise Exception("No portgroup provided.")
+		if not result.vlan:
+			raise Exception("No VLAN id provided.")
+		if not 0 < result.vlan < 4096:
+			raise Exception("Invalid VLAN range (input must be a value 0-4096).")
 		if result.mtu:
-			if 0 < result.mtu < 9001:
-				args['mtu'] = result.mtu
-			elif not 0 < result.mtu < 9001:
-				raise Exception('MTU must be a value between 1 and 9000.')
+			if not 0 < result.mtu < 9001:
+				raise Exception('Invalid MTU range (MTU must be a value between 1 and 9000).')
+			args['mtu'] = result.mtu
 		else:
 			args['mtu'] = 1500
 
