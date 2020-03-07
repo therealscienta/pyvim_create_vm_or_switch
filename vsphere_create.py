@@ -1,7 +1,6 @@
-
 """
 * Auhtor:		Dennis Tyresson
-* Date:			2020-02-23
+* Date:			2020-03-07
 * Course:		IT524G Virtualization
 * Description:	Python script for interacting with VMware vSphere to create vSwitch
 *			 	or guest VM. The script takes several arguments, which can be displayed
@@ -80,10 +79,10 @@ or VM. A name for the unit to create is required.''',
 			raise Exception("No portgroup provided.")
 		if not result.vlan:
 			raise Exception("No VLAN id provided.")
-		if not 0 < result.vlan < 4096:
+		if not 0 < int(result.vlan) < 4096:
 			raise Exception("Invalid VLAN range (input must be a value 0-4096).")
 		if result.mtu:
-			if not 0 < result.mtu < 9001:
+			if not 0 < int(result.mtu) < 9001:
 				raise Exception('Invalid MTU range (MTU must be a value between 1 and 9000).')
 			args['mtu'] = result.mtu
 		else:
@@ -119,6 +118,7 @@ or VM. A name for the unit to create is required.''',
 		args['ram'] = result.ram
 		args['disk'] = result.disk
 		args['port_group'] = result.port_group
+		args['template'] = False
 	else:
 		raise Exception("No action specified!")
 	return args
@@ -126,7 +126,7 @@ or VM. A name for the unit to create is required.''',
 def get_conn_args():
 	'''Get host info from config file'''
 	config = configparser.ConfigParser()
-	config.read('vsphere.conf')
+	config.read('vsphere_create.conf')
 	args['address'] = config['host']['ip address']
 	args['username'] = config['host']['username']
 	args['password'] = config['host']['password']
@@ -178,7 +178,7 @@ class ServerConnection():
 		'''Function that evaluate user input against available hardware resources'''
 		datastore = self.content.rootFolder.childEntity[0].datastore
 		for store in datastore:
-			if store.name == "NFSstore":
+			if store.name == "Netstore":
 				free_disk = (round(int(store.summary.freeSpace)/1024/1024/1024))
 		saved_cpu = 0
 		saved_memory = 0
@@ -261,7 +261,7 @@ class ServerConnection():
 		# Get environment resources
 		vm_folder = self.get_obj([vim.Folder], 'vm')
 		resource_pool = self.get_obj([vim.ResourcePool], 'Resources')
-		datastore = '[NFSstore] ' + args['name']
+		datastore = '[Netstore] ' + args['name']
 
 		# Define specifications
 		vmx_file = vim.vm.FileInfo(logDirectory=None,
@@ -329,7 +329,7 @@ class ServerConnection():
 			raise Exception("Template not found.")
 		vm_folder = self.get_obj([vim.Folder], 'vm')
 		resource_pool = self.get_obj([vim.ResourcePool], 'Resources')
-		datastore = self.get_obj([vim.Datastore], 'NFSstore')
+		datastore = self.get_obj([vim.Datastore], 'Netstore')
 
 		# Define specifications
 		vmconf = vim.vm.ConfigSpec()
